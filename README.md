@@ -7,6 +7,8 @@ Lumina is a native WGSL shader pack built from scratch for the modern **Horizon*
 
 ---
 
+<img width="1920" height="1057" alt="image" src="https://github.com/user-attachments/assets/480268cf-afe0-4921-82bc-6078862e88c7" />
+
 <img width="1920" height="1057" alt="image" src="https://github.com/user-attachments/assets/f1bfd7d7-4641-4d12-8cca-913ef64a247c" />
 
 <img width="1920" height="1057" alt="image" src="https://github.com/user-attachments/assets/2fb43d22-3517-4a41-a2b1-b7e813ca7f27" />
