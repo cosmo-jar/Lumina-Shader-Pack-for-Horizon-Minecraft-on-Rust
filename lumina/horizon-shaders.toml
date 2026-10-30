@@ -1,0 +1,196 @@
+schema = 1
+id = "lumina"
+name = "Lumina"
+version = "0.6.0"
+api = "0.1"
+description = "Natural lighting, crystalline azure skies, soft canopy shadows, animated water, volumetric god rays, organic rain puddles on grass & dirt, and atmospheric weather."
+authors = ["cosmo-jar"]
+license = "GPL-3.0-or-later"
+shared = ["common.wgsl"]
+
+[sky]
+file = "sky.wgsl"
+name = "Atmospheric Sky"
+
+[material]
+file = "material.wgsl"
+name = "Natural Surfaces & Water"
+
+[[post]]
+file = "post/atmosphere.wgsl"
+name = "Atmospheric Fog & God Rays"
+
+[[post]]
+file = "post/grade.wgsl"
+name = "Cinematic Grade"
+
+[[options]]
+id = "water_waves"
+name = "Water Waves & Glints"
+description = "Animated 3D waves, Fresnel reflections and sunlight specular highlights."
+type = "bool"
+default = true
+
+[[options]]
+id = "volumetric_clouds"
+name = "Volumetric 3D Clouds"
+description = "Enable or disable custom volumetric 3D clouds. Set false to completely disable custom clouds and restore maximum FPS."
+type = "bool"
+default = true
+
+[[options]]
+id = "cloud_profile"
+name = "Cloud Performance Preset"
+description = "Cloud raymarching step density: Fast (maximum FPS), Balanced (optimal), Cinematic (extra samples)."
+type = "choice"
+values = ["Fast", "Balanced", "Cinematic"]
+default = "Fast"
+
+[[options]]
+id = "cloud_density_opt"
+name = "Cloud Density"
+description = "Cloud density and atmospheric sky coverage."
+type = "float"
+default = 1.0
+min = 0.5
+max = 2.0
+step = 0.1
+
+[[options]]
+id = "rain_puddles"
+name = "Rain Puddles & Wet Surfaces"
+description = "Procedural rain puddles on grass and dirt with raindrop impact ripples."
+type = "bool"
+default = false
+
+[[options]]
+id = "sun_glow"
+name = "Solar Glow"
+description = "Solar corona and horizon atmospheric scattering."
+type = "float"
+default = 1.0
+min = 0.0
+max = 2.0
+step = 0.1
+
+[[options]]
+id = "torch_warmth"
+name = "Torch Warmth"
+description = "Warm golden tone of lanterns and torches."
+type = "float"
+default = 1.0
+min = 0.0
+max = 2.0
+step = 0.1
+
+[[options]]
+id = "god_rays"
+name = "Volumetric God Rays"
+description = "Sunbeams and light shafts streaming through trees, foliage and mountain ridges."
+type = "bool"
+default = true
+
+[[options]]
+id = "god_rays_intensity"
+name = "God Rays Intensity"
+description = "Brightness of volumetric crepuscular light shafts."
+type = "float"
+default = 1.0
+min = 0.0
+max = 2.0
+step = 0.1
+
+[[options]]
+id = "fog_density"
+name = "Fog Density"
+description = "Intensity of atmospheric and valley fog."
+type = "float"
+default = 1.0
+min = 0.0
+max = 3.0
+step = 0.1
+
+[[options]]
+id = "exposure"
+name = "Exposure"
+description = "Overall scene brightness."
+type = "float"
+default = 0.94
+min = 0.5
+max = 2.0
+step = 0.05
+
+[[options]]
+id = "contrast"
+name = "Contrast"
+description = "Cinematic contrast curve."
+type = "float"
+default = 1.04
+min = 0.5
+max = 2.0
+step = 0.05
+
+[[options]]
+id = "saturation"
+name = "Saturation"
+description = "Color saturation."
+type = "float"
+default = 1.08
+min = 0.5
+max = 2.0
+step = 0.05
+
+[[options]]
+id = "vignette"
+name = "Vignette"
+description = "Soft cinematic frame vignette."
+type = "bool"
+default = true
+
+[[options]]
+id = "underwater_optics"
+name = "Underwater Optics & Caustics"
+description = "Realistic underwater refractive wave wobble, sunlight caustics and deep turquoise light absorption."
+type = "bool"
+default = true
+
+[[options]]
+id = "lens_flares"
+name = "Cinematic Lens Flares"
+description = "anamorphic sun streaks, optical rainbow ring and lens flares."
+type = "bool"
+default = true
+
+[[options]]
+id = "chromatic_aberration"
+name = "Chromatic Aberration"
+description = "Subtle cinematic lens dispersion near the screen edges (crystal clear center)."
+type = "bool"
+default = true
+
+[[options]]
+id = "chromatic_aberration_strength"
+name = "Chromatic Aberration Strength"
+description = "Intensity of optical chromatic fringe dispersion."
+type = "float"
+default = 1.0
+min = 0.0
+max = 2.0
+step = 0.1
+
+[[options]]
+id = "wide_bloom"
+name = "Wide Bloom"
+description = "Dual-tier atmospheric bloom: sharp emissive core + dreamy soft wide luminous halo."
+type = "bool"
+default = true
+
+[[options]]
+id = "bloom_intensity"
+name = "Bloom Intensity"
+description = "Glow intensity around torches, lanterns, fire and celestial bodies."
+type = "float"
+default = 1.0
+min = 0.0
+max = 2.5
+step = 0.1
