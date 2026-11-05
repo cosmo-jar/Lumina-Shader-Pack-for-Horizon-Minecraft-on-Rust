@@ -23,9 +23,18 @@ fn post(input: PostInput) -> vec4<f32> {
         let vpos = select(vec3<f32>(0.0, 0.0, 36.0), view_position(input.uv, input.depth), is_terrain);
         let dist = select(36.0, length(vpos), is_terrain);
 
-        // Water absorption: Red wavelengths vanish first, giving deep turquoise tone
+        // Water absorption: Red wavelengths vanish first, giving deep vibrant turquoise tone
         let water_extinction = exp(-vec3<f32>(0.15, 0.045, 0.018) * dist);
-        let water_scatter_color = vec3<f32>(0.025, 0.22, 0.38) * (daylight() * 0.75 + 0.25);
+
+        let day = daylight();
+        let tw = twilight();
+        let day_water = vec3<f32>(0.025, 0.22, 0.38);
+        let tw_water = vec3<f32>(0.040, 0.16, 0.32);
+        let night_water = vec3<f32>(0.006, 0.045, 0.08);
+        var water_scatter_color = mix(night_water, day_water, day);
+        water_scatter_color = mix(water_scatter_color, tw_water, tw * (1.0 - frame.rain));
+        water_scatter_color = mix(water_scatter_color, vec3<f32>(0.02, 0.14, 0.22), frame.rain * 0.6);
+
         let water_scatter = 1.0 - exp(-dist * 0.065);
 
         var col = base_col * water_extinction + water_scatter_color * water_scatter;
@@ -37,7 +46,7 @@ fn post(input: PostInput) -> vec4<f32> {
             let c1 = sin(caustic_p.x * 2.2 + w_time) + cos(caustic_p.y * 2.0 + w_time * 1.1);
             let c2 = sin(caustic_p.x * 1.8 - w_time * 1.2) + cos(caustic_p.y * 2.4 - w_time * 0.8);
             let caustic = pow(clamp((c1 + c2) * 0.32 + 0.5, 0.0, 1.0), 3.0);
-            let caustic_fade = exp(-dist * 0.05) * daylight();
+            let caustic_fade = exp(-dist * 0.05) * day * (1.0 - frame.rain * 0.8);
             col += vec3<f32>(0.15, 0.45, 0.55) * (caustic * caustic_fade * 0.35);
         }
 
@@ -89,7 +98,7 @@ fn post(input: PostInput) -> vec4<f32> {
 
     // --- 2. Dynamic Atmospheric Color Palette ---
     // Pure azure for clear day, magical rose/amber for sunset, cosmic dark navy for night, slate/storm for rain
-    let day_fog = vec3<f32>(0.56, 0.76, 0.94);
+    let day_fog = vec3<f32>(0.60, 0.76, 0.96);
     let tw_fog = mix(vec3<f32>(0.76, 0.30, 0.46), vec3<f32>(1.0, 0.52, 0.18), max(dot(ray_dir, frame.sun_direction), 0.0));
     let night_fog = vec3<f32>(0.015, 0.024, 0.048);
     let rain_fog = mix(vec3<f32>(0.42, 0.46, 0.52), vec3<f32>(0.18, 0.20, 0.25), frame.thunder) * (1.0 - frame.thunder * 0.40);
@@ -126,7 +135,7 @@ fn post(input: PostInput) -> vec4<f32> {
 
     // --- 4. Volumetric Sun Rays (God Rays / Crepuscular Light Shafts) ---
     var godrays_color = vec3<f32>(0.0);
-    if god_rays && (day > 0.05 || tw > 0.05) && rain < 0.85 && frame.dimension == 0 {
+    if god_rays && sun_align > 0.12 && (day > 0.05 || tw > 0.05) && rain < 0.85 && frame.dimension == 0 {
         let sun_view = frame.view * vec4<f32>(frame.sun_direction, 0.0);
         let clip = frame.projection * vec4<f32>(sun_view.xyz, 1.0);
 
@@ -138,16 +147,18 @@ fn post(input: PostInput) -> vec4<f32> {
             let ray_len = length(delta);
 
             if ray_len > 0.001 {
-                let steps = 14;
+                let steps = 8;
                 let step_len = min(ray_len, 0.45) / f32(steps);
                 let step_dir = delta / ray_len;
                 let step_vec = step_dir * step_len;
 
-                var march_uv = input.uv + step_vec * 0.5;
+                // Screen-space dither: completely prevents stepping jumps when the player moves
+                let dither = fract(sin(dot(input.uv, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+                var march_uv = input.uv + step_vec * (0.25 + dither * 0.50);
                 var ray_accum = 0.0;
                 var decay = 1.0;
 
-                for (var s = 0; s < 14; s++) {
+                for (var s = 0; s < 8; s++) {
                     march_uv += step_vec;
                     if march_uv.x >= 0.0 && march_uv.x <= 1.0 && march_uv.y >= 0.0 && march_uv.y <= 1.0 {
                         let sample_d = depth_at(march_uv);
@@ -156,11 +167,13 @@ fn post(input: PostInput) -> vec4<f32> {
                             ray_accum += decay;
                         }
                     }
-                    decay *= 0.88;
+                    decay *= 0.82;
                 }
 
-                let ray_radial_fade = pow(sun_align, 2.0);
-                let ray_factor = (ray_accum / 9.0) * ray_radial_fade * god_rays_intensity * (day * 0.75 + tw * 1.6) * (1.0 - rain);
+                // Air depth factor: nearby walls / building facades (< 6 blocks) never get painted with jumping rays!
+                let air_depth = 1.0 - exp(-dist * 0.045);
+                let ray_radial_fade = pow(sun_align, 2.5);
+                let ray_factor = (ray_accum / 5.2) * ray_radial_fade * god_rays_intensity * (day * 0.75 + tw * 1.6) * (1.0 - rain) * air_depth;
 
                 let ray_tint = mix(vec3<f32>(1.0, 0.52, 0.16), vec3<f32>(1.0, 0.96, 0.88), day);
                 godrays_color = ray_tint * (ray_factor * 0.48);
