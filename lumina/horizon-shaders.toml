@@ -1,7 +1,7 @@
 schema = 1
 id = "lumina"
 name = "Lumina"
-version = "0.6.0"
+version = "1.0.0"
 api = "0.1"
 description = "Natural lighting, crystalline azure skies, soft canopy shadows, animated water, volumetric god rays, organic rain puddles on grass & dirt, and atmospheric weather."
 authors = ["cosmo-jar"]
@@ -16,6 +16,63 @@ name = "Atmospheric Sky"
 file = "material.wgsl"
 name = "Natural Surfaces & Water"
 
+[vertex]
+file = "vertex.wgsl"
+name = "Wind and waves"
+
+[weather]
+file = "weather.wgsl"
+name = "Atmospheric Weather"
+
+[reflection]
+option = "reflections"
+
+[shadow]
+resolution = 1024
+distance = 112.0
+option = "shadows"
+resolution_option = "shadow_resolution"
+distance_option = "shadow_distance"
+solid_materials = [1]
+
+[[tags]]
+id = "foliage"
+sprites = [
+  "block/*_leaves",
+  "block/*leaves",
+  "block/short_grass",
+  "block/tall_grass_*",
+  "block/fern",
+  "block/large_fern_*",
+  "block/vine"
+]
+
+[[tags]]
+id = "glass"
+sprites = ["block/glass", "block/*_stained_glass", "block/tinted_glass"]
+
+[[materials]]
+id = 1
+sprites = ["block/*_leaves", "block/*leaves"]
+
+[[materials]]
+id = 2
+sprites = [
+  "block/short_grass",
+  "block/short_dry_grass",
+  "block/tall_dry_grass",
+  "block/fern",
+  "block/bush",
+  "block/dead_bush",
+  "block/*_sapling",
+  "block/dandelion",
+  "block/poppy",
+  "block/*_tulip",
+  "block/tall_grass_*",
+  "block/large_fern_*",
+  "block/vine"
+]
+
 [[post]]
 file = "post/atmosphere.wgsl"
 name = "Atmospheric Fog & God Rays"
@@ -25,11 +82,65 @@ file = "post/grade.wgsl"
 name = "Cinematic Grade"
 
 [[options]]
+id = "shadows"
+name = "Directional Shadows"
+description = "Real sun & moon shadow maps cast by terrain, blocks, trees, foliage and entities."
+type = "bool"
+default = true
+
+[[options]]
+id = "shadow_resolution"
+name = "Shadow Quality (FPS)"
+description = "Shadow map resolution: 512 (fast), 1024 (balanced & crisp grass), 2048 (ultra)."
+type = "choice"
+values = ["512", "1024", "1536", "2048"]
+default = "1024"
+
+[[options]]
+id = "shadow_distance"
+name = "Shadow Distance"
+description = "Distance in blocks that shadows cover."
+type = "choice"
+values = ["64", "96", "112", "128", "160"]
+default = "112"
+
+[[options]]
+id = "reflections"
+name = "Planar Water Reflections"
+description = "Real-time planar mirror reflections of terrain, mountains and trees on water surfaces."
+type = "bool"
+default = true
+
+[[options]]
+id = "ssr_reflections"
+name = "Screen-Space Reflections (SSR)"
+description = "High-speed Screen-Space Reflections (+60-80 FPS). Reflects visible mountains, trees and shores on water with zero extra render passes."
+type = "bool"
+default = true
+
+[[options]]
 id = "water_waves"
 name = "Water Waves & Glints"
 description = "Animated 3D waves, Fresnel reflections and sunlight specular highlights."
 type = "bool"
 default = true
+
+[[options]]
+id = "waving"
+name = "Waving Foliage"
+description = "Gentle wind swaying animation on leaves, grass and plants."
+type = "bool"
+default = true
+
+[[options]]
+id = "wave_strength"
+name = "Wind Strength"
+description = "Intensity of wind swaying on foliage."
+type = "float"
+default = 1.0
+min = 0.2
+max = 2.0
+step = 0.1
 
 [[options]]
 id = "volumetric_clouds"
@@ -61,7 +172,7 @@ id = "rain_puddles"
 name = "Rain Puddles & Wet Surfaces"
 description = "Procedural rain puddles on grass and dirt with raindrop impact ripples."
 type = "bool"
-default = false
+default = true
 
 [[options]]
 id = "sun_glow"
@@ -194,3 +305,18 @@ default = 1.0
 min = 0.0
 max = 2.5
 step = 0.1
+
+[[options]]
+id = "anti_aliasing"
+name = "Anti-Aliasing (FXAA)"
+description = "Smooths jagged pixel stairs on block edges and roofs while keeping Lumina's razor-sharp clarity."
+type = "choice"
+values = ["Sharp", "Smooth", "Off"]
+default = "Sharp"
+
+[[options]]
+id = "roof_occlusion_opt"
+name = "Roof & Overhang Occlusion"
+description = "Realistic directional shading and deep ambient occlusion under house roofs, porches and tree canopies."
+type = "bool"
+default = true

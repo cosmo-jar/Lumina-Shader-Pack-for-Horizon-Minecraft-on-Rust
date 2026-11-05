@@ -261,3 +261,18 @@ fn tonemap_aces(x: vec3<f32>) -> vec3<f32> {
         vec3<f32>(1.0)
     );
 }
+
+// Physical water waves: crossing swells with harmonic surface chop
+const WATER_AMPLITUDE: f32 = 0.08;
+
+fn water_wave(xz: vec2<f32>, t: f32) -> f32 {
+    let swell = sin(xz.x * 0.90 + t * 1.3) * sin(xz.y * 0.70 + t * 1.1);
+    let chop = sin((xz.x + xz.y) * 1.70 - t * 2.1) * 0.5;
+    return 0.5 - (swell + chop) / 3.0;
+}
+
+// Soft shoulder above 0.8 to roll bright glints and highlights into white smoothly
+fn shoulder(c: vec3<f32>) -> vec3<f32> {
+    let over = max(c - vec3<f32>(0.8), vec3<f32>(0.0));
+    return min(c, vec3<f32>(0.8)) + 0.2 * (vec3<f32>(1.0) - exp(-over * 5.0));
+}

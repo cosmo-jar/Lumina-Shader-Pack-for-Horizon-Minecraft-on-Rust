@@ -1,116 +1,134 @@
-# Lumina Shader Pack for Horizon (Minecraft 26.3)
+# Lumina Shader Pack for Horizon (Minecraft 26.3) — v1.0.0
 
-> **Early Preview / Work in Progress**  
-> *Lumina is an active project and this is not a final release. Visual balance, features, and optimizations are continuously evolving.*
-
-Lumina is a native WGSL shader pack built from scratch for the modern **Horizon** Rust/WGPU game engine. It is designed to be **lightweight in performance** while delivering **balanced, rich atmospheric visuals** without relying on heavy post-processing hacks or preprocessor overhead.
+Lumina is a native WGSL shader pack engineered specifically for the modern **Horizon** Rust/WGPU game engine. It is designed to deliver **radiant, realistic, and rich atmospheric visuals** while maintaining **exceptionally high frame rates (200-300+ FPS)** without heavy post-processing bloat.
 
 ---
 
-## ⚠️ Important Setup Requirement
-**Disable standard vanilla Minecraft clouds in game settings!**  
-Go to:  
-**Options > Video Settings > Details > Clouds: OFF**  
-*(Настройки > Настройки графики > Элементы... > Облака: ВЫКЛ)*  
-This prevents vanilla 2D/blocky clouds from clipping through Lumina's procedural 3D volumetric clouds.
+## ⚠️ Recommended Game Setup
+**Disable standard Minecraft clouds in game settings:**  
+Set **Clouds: OFF** in your video details settings to let Lumina's procedural 3D volumetric clouds render without interference.
 
 ---
 
-## Features
+## 🌟 Key Features
 
-- **Balanced Daylight & Natural Tone**: Warm sunlight, cool sky-fill ambient shadows under trees and overhangs with a clean 2:1 contrast ratio, and filmic ACES highlight roll-off.
-- **Foliage Subsurface Scattering (SSS)**: Cherry blossoms and plant leaves catch warm translucent sunlight when backlit.
-- **Solar Contours & Rim Lighting**: Low grass tops and mountain ridges catch a delicate golden glow when looking toward the sun.
-- **Procedural 3D Volumetric Clouds**: Spherical cumulus billows with organic altitude gates and boundary-safe erosion.
-- **Crystalline Water**: Animated multi-frequency wave perturbation, sunlight glints, caustics, and Fresnel sky reflections.
-- **Atmospheric Fog & God Rays**: Crepuscular sun rays through trees and soft horizon depth fade.
-- **Underwater Optics**: Depth-based light absorption, caustics, and subtle refraction.
+### ☀️ Radiant Daytime & Atmosphere
+- **Warm Golden Sunlight**: Natural warm sunbeams illuminating open terrain, contrasted with cool, radiant azure ambient skylight in shadows.
+- **Directional Hemispherical Sky Occlusion**: Physically accurate dome lighting. Horizontal surfaces receive full zenith sky light, vertical walls receive half-hemisphere fill, and downwards-facing surfaces (ceilings, eaves) receive soft ground bounce.
+- **Deep Roof & Overhang Shadowing**: Real non-linear ambient light falloff under house roofs, porches, and balconies, creating deep architectural contrast and cozy shaded interiors.
+- **Selective Vibrance**: Midtone chroma enhancement that makes green grass, foliage, and flowers lush and vibrant without oversaturating bright highlights or lava.
+- **Subsurface Scattering (SSS) & Solar Rim**: Translucent leaf glowing on cherry blossoms and foliage when backlit by the sun, plus delicate golden rim highlights on grass tops and ridges.
 
----
+### 🌓 Dramatic Twilight & Midnight
+- **Magical Sunset / Golden Hour**: Warm amber sunlight and soft rose-violet twilight horizons.
+- **Midnight Navy**: Silver moonlight casting soft shadows, with dark celestial blue ambient illumination.
 
-## Configuration & In-Game Options
+### 🛡️ Directional Shadows & Ambient Occlusion
+- **Real-Time Sun & Moon Shadows**: Cast by terrain, blocks, foliage, and entities with distortion-aware bias calculation for razor-sharp grass shadows at any distance without acne.
+- **Deep Contact Vertex AO**: Pronounced contact shadows in corners and crevices under roofs and against walls.
 
-All options are configurable in-game under **Options > Horizon Settings > Shader Packs > Lumina**, or by editing `horizon-shaders.toml`:
+### 🔍 Clarity Anti-Aliasing (FXAA)
+- **Edge-Selective Smoothing**: Smooths jagged pixel staircases on block edges, roofs, and stair blocks without smearing or blurring textures.
+- **Clarity Guard & Micro-Sharpening**: Flat surfaces, pixel-art textures, wood planks, stone, and UI remain 100% untouched and razor-sharp.
+- **Three Modes**: *Sharp* (crisp edges + HD texture clarity), *Smooth* (cinematic edge softening), and *Off* (native raw pixels).
 
-### ☁️ Volumetric Clouds (`cloud_profile` & `volumetric_clouds`)
-- `volumetric_clouds = true` (Default: `true`): Enable or disable 3D volumetric clouds. Turn OFF for flat sky or maximum performance.
-- `cloud_profile` (Default: `"Fast"`):
-  - **`"Fast"`** *(Recommended for high FPS)*: Fast 12-step raymarching. Ultra-lightweight with high performance.
-  - **`"Balanced"`**: Smooth 16-step raymarching with enhanced billow contours.
-  - **`"Cinematic"`**: 20-step raymarching for high-detail captures and screenshots.
-- `cloud_density_opt` (Default: `1.0`): Adjusts cloud thickness and sky coverage.
+### 🌊 Physical Water, Reflections & Underwater World
+- **Dual Reflection Pipeline**: High-speed Screen Space Reflections (SSR) for smooth 200+ FPS reflections, combined with planar mirror reflections of mountains, trees, and terrain.
+- **Beer-Lambert Light Absorption**: Crystal-clear shallow waters transitioning into sapphire/turquoise depth.
+- **Snell's Window**: Looking up from underwater provides a crystal-clear, undulating view of the sun, sky, clouds, and trees, with total internal reflection at glancing angles.
+- **Underwater Optics**: Animated sunlight caustics dancing across the seabed, sand, and corals, combined with gentle refractive screen wobble and oceanic depth absorption.
 
-### 🌧️ Rain Wetness & Procedural Puddles (`rain_puddles`)
-- `rain_puddles = false` (Default: `false`):
-  - By default, puddles are turned off to maximize FPS on all GPUs.
-  - **To enable puddles**: Set `rain_puddles = true` in the in-game options or in `horizon-shaders.toml`.
-  - When enabled during rain, organic water puddles form across grass blocks and dirt with dynamic circular raindrop impact ripples, wet surface dampening, and sky reflections.
+### ☁️ Procedural 3D Volumetric Clouds
+- Multi-octave cumulus cloud billows with organic altitude gates, realistic sun phase scattering, and boundary-safe edge erosion with zero slicing artifacts.
+- Includes **Fast**, **Balanced**, and **Cinematic** performance profiles.
 
-### ☀️ Lighting & Atmosphere
-- `sun_glow` (Default: `1.0`): Solar corona and horizon atmospheric scatter.
-- `god_rays` (Default: `true`): Volumetric crepuscular light shafts streaming through tree canopies.
-- `torch_warmth` (Default: `1.0`): Warm amber-orange radiance of torches and lanterns.
-- `fog_density` (Default: `1.0`): Atmospheric distance and valley mist density.
-- `water_waves` (Default: `true`): Animated 3D water waves and sunlight glints.
-
----
----
-
-# Шейдер-пак Lumina для Horizon (Minecraft 26.3) [RU]
-
-> **Ранняя версия / В разработке**  
-> *Lumina находится в активной разработке, это не финальная версия. Баланс освещения, визуальные эффекты и оптимизация продолжают улучшаться.*
-
-Lumina — это нативный WGSL шейдер-пак, созданный специально для движка **Horizon** (Rust/WGPU). Главная концепция пака — **легковесность в плане производительности (высокий FPS)** и **сбалансированная, приятная глазу атмосфера** без перегруженности лишними эффектами.
+### 🌧️ Rain Puddles & Atmospheric Weather
+- **Procedural Rain Puddles**: Form naturally across grass blocks and dirt during rainfall with concentric raindrop impact ripples and sky reflections.
+- **Native Weather Stage**: Custom rain and snowfall rendering styled to match the atmospheric aesthetic.
+- **Volumetric God Rays**: Crepuscular sunbeams streaming through mountain passes and tree canopies.
 
 ---
 
-## ⚠️ Важная настройка перед игрой
-**Обязательно отключите стандартные майнкрафтовские облака!**  
-Перейдите в:  
-**Настройки > Настройки графики > Элементы... > Облака: ВЫКЛ**  
-*(Options > Video Settings > Details > Clouds: OFF)*  
-Это необходимо, чтобы плоские квадратные облака игры не пересекались с кастомными объемными 3D-облаками Lumina.
+## ⚙️ Configuration & In-Game Options
+
+All settings can be tweaked directly in the **shader settings menu** in-game, or edited in `horizon-shaders.toml`:
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| **Anti-Aliasing (FXAA)** | Choice | `Sharp` | `Sharp` (edge-selective smoothing + HD clarity), `Smooth`, or `Off`. |
+| **Roof & Overhang Occlusion** | Bool | `true` | Realistic directional shading and deep ambient occlusion under house roofs and eaves. |
+| **Directional Shadows** | Bool | `true` | Real sun & moon shadow maps cast by terrain and blocks. |
+| **Shadow Quality (FPS)** | Choice | `1024` | Shadow map resolution: `512` (fastest), `1024` (balanced), `1536`, `2048` (ultra). |
+| **Shadow Distance** | Choice | `112` | Distance in blocks that shadow mapping covers. |
+| **Planar Water Reflections** | Bool | `true` | Real-time planar mirror reflections of terrain and trees on water. |
+| **Screen-Space Reflections (SSR)** | Bool | `true` | High-speed SSR reflecting visible terrain and shores at 200+ FPS. |
+| **Water Waves & Glints** | Bool | `true` | Animated 3D waves, Fresnel reflections, and sunlight sparkles. |
+| **Underwater Optics & Caustics** | Bool | `true` | Refractive wave wobble, dancing sunlight caustics, and turquoise absorption. |
+| **Volumetric 3D Clouds** | Bool | `true` | Enable or disable custom raymarched 3D cumulus clouds. |
+| **Cloud Performance Preset** | Choice | `Fast` | `Fast` (12-step max FPS), `Balanced` (16-step), or `Cinematic` (20-step). |
+| **Cloud Density** | Float | `1.0` | Cloud thickness and sky coverage. |
+| **Rain Puddles & Wetness** | Bool | `false` | Organic rain puddles on grass and dirt with raindrop ripples. |
+| **Volumetric God Rays** | Bool | `true` | Sunbeams streaming through tree canopies. |
+| **Wide Bloom** | Bool | `true` | Dual-tier atmospheric glow around torches, lanterns, and celestial bodies. |
+| **Cinematic Lens Flares** | Bool | `true` | Anamorphic sun streaks and optical flares. |
+| **Waving Foliage** | Bool | `true` | Wind swaying on leaves, grass, and plants. |
+| **Torch Warmth** | Float | `1.0` | Warm golden-amber radiance of lanterns and torches. |
 
 ---
 
-## Ключевые визуальные особенности
+# Шейдер-пак Lumina для Horizon (Minecraft 26.3) — v1.0.0 [RU]
 
-- **Сбалансированное дневное освещение**: Тёплые солнечные лучи на открытой местности, мягкая прохладная небесная полутень под кронами сакур и деревьев, отсутствие выжигающего «ядерного» пересвета благодаря ACES-тонемаппингу.
-- **Просвечивание листвы (Subsurface Scattering)**: Лепестки цветущей сакуры и листва деревьев излучают нежное тёплое свечение, когда солнце светит сквозь них.
-- **Контурный свет на траве (Rim Lighting)**: На рассвете и закате верхушки травы и контуры холмов подсвечиваются золотистым ореолом.
-- **Объемные 3D-облака**: Мягкие кучевые облака с естественной формой без ступенчатых срезов.
-- **Кристальная вода**: Анимированная рябь волн, солнечные блики, подводные каустики и отражение неба по Френелю.
-- **Лучи солнца (God Rays)**: Чистые объемные световые столбы, пробивающиеся сквозь деревья и горы.
-- **Подводная оптика**: Реалистичное поглощение света на глубине (бирюзовый градиент), преломление волн и солнечные узоры на дне.
+Lumina — это нативный WGSL шейдер-пак, созданный специально для современного игрового движка **Horizon** (Rust/WGPU). Главные достоинства пака — **чистая, живая и реалистичная атмосфера** в сочетании с **высоким фреймрейтом (200-300+ FPS)** без перегруженности лишними пост-эффектами.
 
 ---
 
-## Настройки в меню и конфигурации
+## ⚠️ Рекомендуемая настройка перед игрой
+**Отключите стандартные облака игры в настройках графики:**  
+Установите **Облака: ВЫКЛ** (*Clouds: OFF*), чтобы ванильные плоские облака не пересекались с кастомными объемными 3D-облаками Lumina.
 
-Все параметры можно переключать прямо в игре через меню:  
-**Настройки > Настройки Horizon > Шейдер-паки > Lumina** (либо в файле `horizon-shaders.toml`).
+---
 
-### ☁️ Режимы и профили облаков (`cloud_profile` и `volumetric_clouds`)
-- `volumetric_clouds = true` (По умолчанию: `true`): Включение или полное отключение кастомных 3D-облаков. Если отключить, небо будет чистым, а FPS вырастет до максимума.
-- `cloud_profile` (По умолчанию: `"Fast"`):
-  - **`"Fast"`** *(Рекомендуется для максимального FPS)*: Быстрый реймаршинг в 12 шагов. Минимальная нагрузка на видеокарту.
-  - **`"Balanced"`**: Оптимальный профиль с улучшенной детализацией кучевых шапок (16 шагов).
-  - **`"Cinematic"`**: Высокодетализированный профиль (20 шагов) для красивых скриншотов и видео.
-- `cloud_density_opt` (По умолчанию: `1.0`): Плотность и заполненность неба облаками.
+## 🌟 Главные особенности
 
-### 🌧️ Намокание поверхностей и лужи (`rain_puddles`)
-- `rain_puddles = false` (По умолчанию: `false`):
-  - Для максимальной производительности процедурные лужи по умолчанию отключены.
-  - **Как включить лужи**: Установите переключатель в настройках игры в положение `true` (или в файле `horizon-shaders.toml` пропишите `default = true` в блоке `rain_puddles`).
-  - Во время дождя на дёрне и земле будут органично появляться лужи с реалистичными расходящимися кругами от падающих капель дождя и отражением неба.
+### ☀️ Дневное освещение и сочная атмосфера
+- **Тёплый золотистый солнечный свет**: Натуральный тёплый свет солнца на открытых пространствах в гармонии со свежей сияющей лазурью неба в тенях.
+- **Купольное полусферное затенение (Sky Occlusion)**: Верхние грани блоков видят всё небо (100%), вертикальные стены — половину (75%), а потолки и нижние стороны блоков обращены к земле и получают только мягкий отражённый свет (30-35%).
+- **Глубокие тени под крышами и навесами**: Нелинейный физический спад рассеянного света под крыльцом, навесом или свесом крыши дома. Под навесами теперь царит настоящая глубокая, объёмная полутень.
+- **Selective Vibrance**: Алгоритм селективной сочности, который делает зелень травы, листву деревьев и цветы насыщенными и живыми, предотвращая кислотное перенасыщение ярких блоков.
+- **Просвечивание листвы (SSS) и солнечный контур**: Сквозное свечение листвы и лепестков сакуры на солнце, а также золотистый контурный ореол на траве и верхушках холмов.
 
-### ☀️ Освещение и атмосфера
-- `sun_glow` (По умолчанию: `1.0`): Яркость солнечной короны и рассеивания на горизонте.
-- `god_rays` (По умолчанию: `true`): Включение/выключение объемных лучей солнца.
-- `torch_warmth` (По умолчанию: `1.0`): Теплота и мягкость света факелов и фонарей.
-- `fog_density` (По умолчанию: `1.0`): Плотность атмосферного тумана.
-- `water_waves` (По умолчанию: `true`): Анимация 3D-волн и бликов на воде.
+### 🌓 Закат, сумерки и ночь
+- **Кинематографичный закат**: Насыщенные янтарные солнечные лучи и розово-фиолетовый горизонт.
+- **Глубокая полночь**: Серебристый лунный свет с мягкими тенями и тёмно-синей небесной полутенью.
+
+### 🛡️ Направленные тени и контактное затенение
+- **Динамические тени солнца и луны**: Настоящие теневые карты от блоков, деревьев и сущностей с защитой от искажений на любом расстоянии.
+- **Контактное затенение (Vertex AO)**: Глубокие контрастные тени в стыках между крышей и стенами.
+
+### 🔍 Сглаживание Clarity Anti-Aliasing (FXAA)
+- **Устранение лесенок без размытия**: Сглаживает геометрические ступеньки на краях крыш, ступенях и заборах на фоне неба.
+- **Защита текстур (Clarity Guard)**: Плоские поверхности, доски, кирпич, камень, листва и интерфейс не размываются, сохраняя фирменную чёткость Lumina.
+- **Режимы**: *Sharp* (сглаженные края + чёткие текстуры), *Smooth* (мягкое сглаживание) и *Off* (исходные пиксели).
+
+### 🌊 Физическая вода, отражения и подводный мир
+- **Комбинированные отражения**: Быстрые Screen Space Reflections (SSR) для максимального FPS (200+) в сочетании с нативными плоскими зеркальными отражениями гор и деревьев.
+- **Поглощение света (Закон Бера-Ламберта)**: Кристально прозрачное мелководье, плавно переходящее в сапфировую и бирюзовую глубину.
+- **Окно Снелла**: При взгляде вверх из-под воды солнце, небо, облака и берег кристально видны сквозь колеблющиеся волны.
+- **Подводная атмосфера**: Анимированные солнечные каустики на песчаном дне, мягкое волновое покачивание экрана и глубокое бирюзовое рассеивание.
+
+### ☁️ Объемные 3D-облака
+- Многооктавные кучевые облака с естественной формой, рассеиванием света и профилями производительности (**Fast**, **Balanced**, **Cinematic**).
+
+### 🌧️ Лужи и кастомная погода
+- **Процедурные лужи**: Формируются во время дождя на дёрне и земле с кругами от падающих капель и отражением неба.
+- **Кастомные осадки**: Стилизованные капли дождя и снежинки.
+- **Солнечные лучи (God Rays)**: Чистые объемные столбы света сквозь горы и деревья.
+
+---
+
+## ⚙️ Настройки в игре
+
+Все параметры настраиваются прямо в **настройках шейдеров** в игре, либо через файл `horizon-shaders.toml`.
 
 ---
 

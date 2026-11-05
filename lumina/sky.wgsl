@@ -263,10 +263,12 @@ fn sky(input: SkyInput) -> vec4<f32> {
     let night = night_factor();
     let rain = frame.rain;
 
-    // --- 1. Clean Daytime Azure Sky ---
+    // --- 1. Clean Daytime ---
     let day_zenith = vec3<f32>(0.12, 0.38, 0.88);
-    let day_horizon = vec3<f32>(0.56, 0.76, 0.94);
-    let day_sky = mix(day_horizon, day_zenith, smoothstep(0.0, 0.75, up));
+    let day_mid = vec3<f32>(0.38, 0.62, 0.94);
+    let day_horizon = vec3<f32>(0.60, 0.76, 0.96);
+    var day_sky = mix(day_horizon, day_mid, smoothstep(0.0, 0.35, up));
+    day_sky = mix(day_sky, day_zenith, smoothstep(0.30, 0.85, up));
 
     // --- 2. Magical Sunset / Twilight Palette ---
     let dusk_zenith = vec3<f32>(0.06, 0.08, 0.24);
@@ -298,6 +300,10 @@ fn sky(input: SkyInput) -> vec4<f32> {
 
     // --- 5. Atmospheric Scattering (Preserves Vanilla Square Sun Quad) ---
     if rain < 0.95 {
+        // Soft daytime forward solar haze towards the sun
+        let day_sun_haze = pow(sun_facing, 4.0) * 0.16 * day * (1.0 - rain) * sun_glow;
+        final_sky += vec3<f32>(1.12, 0.96, 0.78) * day_sun_haze;
+
         // Soft atmospheric twilight warmth along horizon without fake circular glare disc
         let sun_haze = pow(sun_facing, 3.0) * 0.12 * tw * (1.0 - rain) * sun_glow;
         final_sky += vec3<f32>(1.0, 0.55, 0.22) * sun_haze;
