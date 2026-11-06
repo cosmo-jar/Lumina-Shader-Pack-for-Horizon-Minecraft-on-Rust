@@ -1,4 +1,4 @@
-# Lumina Shader Pack for Horizon (Minecraft 26.3) — v1.0.0
+# Lumina Shader Pack for Horizon — v1.0.0
 
 Lumina is a native WGSL shader pack engineered specifically for the modern **Horizon** Rust/WGPU game engine. It is designed to deliver **radiant, realistic, and rich atmospheric visuals** while maintaining **exceptionally high frame rates** without heavy post-processing bloat.
 
