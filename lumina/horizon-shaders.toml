@@ -1,12 +1,15 @@
 schema = 1
 id = "lumina"
 name = "Lumina"
-version = "1.0.0"
-api = "0.1"
+version = "1.1.0"
+api = "0.2"
 description = "Natural lighting, crystalline azure skies, soft canopy shadows, animated water, volumetric god rays, organic rain puddles on grass & dirt, and atmospheric weather."
 authors = ["cosmo-jar"]
 license = "GPL-3.0-or-later"
 shared = ["common.wgsl"]
+
+[frame]
+fog = "pack"
 
 [sky]
 file = "sky.wgsl"
@@ -29,7 +32,7 @@ option = "reflections"
 
 [shadow]
 resolution = 1024
-distance = 112.0
+distance = 128.0
 option = "shadows"
 resolution_option = "shadow_resolution"
 distance_option = "shadow_distance"
@@ -102,14 +105,14 @@ name = "Shadow Distance"
 description = "Distance in blocks that shadows cover."
 type = "choice"
 values = ["64", "96", "112", "128", "160"]
-default = "112"
+default = "128"
 
 [[options]]
 id = "reflections"
 name = "Planar Water Reflections"
-description = "Real-time planar mirror reflections of terrain, mountains and trees on water surfaces."
+description = "Real-time planar mirror reflections of terrain, mountains and trees on water surfaces (uses extra render pass)."
 type = "bool"
-default = true
+default = false
 
 [[options]]
 id = "ssr_reflections"
@@ -117,6 +120,16 @@ name = "Screen-Space Reflections (SSR)"
 description = "High-speed Screen-Space Reflections (+60-80 FPS). Reflects visible mountains, trees and shores on water with zero extra render passes."
 type = "bool"
 default = true
+
+[[options]]
+id = "fog_density"
+name = "Fog Density"
+description = "Intensity of atmospheric and distant mountain fog."
+type = "float"
+default = 1.0
+min = 0.0
+max = 3.0
+step = 0.1
 
 [[options]]
 id = "water_waves"
@@ -212,16 +225,6 @@ max = 2.0
 step = 0.1
 
 [[options]]
-id = "fog_density"
-name = "Fog Density"
-description = "Intensity of atmospheric and valley fog."
-type = "float"
-default = 1.0
-min = 0.0
-max = 3.0
-step = 0.1
-
-[[options]]
 id = "exposure"
 name = "Exposure"
 description = "Overall scene brightness."
@@ -262,13 +265,6 @@ default = true
 id = "underwater_optics"
 name = "Underwater Optics & Caustics"
 description = "Realistic underwater refractive wave wobble, sunlight caustics and deep turquoise light absorption."
-type = "bool"
-default = true
-
-[[options]]
-id = "lens_flares"
-name = "Cinematic Lens Flares"
-description = "anamorphic sun streaks, optical rainbow ring and lens flares."
 type = "bool"
 default = true
 

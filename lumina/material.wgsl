@@ -21,12 +21,12 @@ fn distance_at(screen: vec2<f32>, depth: f32) -> f32 {
 fn shadow_texel(p: vec3<f32>) -> f32 {
     let k = frame.shadow_distortion;
     let r = length((frame.shadow_view_proj * vec4<f32>(p, 1.0)).xy);
-    let d = r * k + 1.0 - k;
+    let d = r * k / max(1.0 - k, 0.01) + 1.0;
     return frame.shadow_center_texel * d * d;
 }
 
 // Smooth directional sun/moon shadow with distortion-aware bias (stable grass shadows at any distance, zero acne)
-fn sun_shadow(p: vec3<f32>, offset_dir: vec3<f32>, ndl: f32) -> f32 {
+fn sun_shadow(p: vec3<f32>, offset_dir: vec3<f32>, ndl: f32, min_bias: f32) -> f32 {
     if !shadows || frame.has_shadow == 0u {
         return 1.0;
     }
@@ -34,10 +34,11 @@ fn sun_shadow(p: vec3<f32>, offset_dir: vec3<f32>, ndl: f32) -> f32 {
     if dist > frame.shadow_distance {
         return 1.0;
     }
-    let ground = shadow_texel(p);
+    let ground = min(shadow_texel(p), 0.16);
     let c = clamp(ndl, 0.05, 1.0);
-    let slope = min(sqrt(1.0 - c * c) / c, 8.0);
-    let s = shadow_position(p + offset_dir * ground * (1.2 + slope * 1.5));
+    let slope = min(sqrt(1.0 - c * c) / c, 4.0);
+    let bias = max(ground * (1.2 + slope * 0.9), min_bias);
+    let s = shadow_position(p + offset_dir * bias);
     if s.x < 0.001 || s.x > 0.999 || s.y < 0.001 || s.y > 0.999 {
         return 1.0;
     }
@@ -45,9 +46,9 @@ fn sun_shadow(p: vec3<f32>, offset_dir: vec3<f32>, ndl: f32) -> f32 {
     let s0 = textureSampleCompareLevel(shadow_map, shadow_sampler, s.xy + vec2<f32>(-texel * 0.5, -texel * 0.5), s.z);
     let s1 = textureSampleCompareLevel(shadow_map, shadow_sampler, s.xy + vec2<f32>(texel * 0.5, texel * 0.5), s.z);
     let lit = (s0 + s1) * 0.5;
-    // Ultra-smooth distance fade: shadows dissolve softly over a wide 40-block boundary (zero pop-in while flying)
-    let fade_start = frame.shadow_distance * 0.62;
-    let fade = smoothstep(fade_start, frame.shadow_distance, dist);
+    // Ultra-smooth distance fade: shadows dissolve gradually so no pop-in is visible
+    let fade_start = frame.shadow_distance * 0.55;
+    let fade = smoothstep(fade_start, frame.shadow_distance * 0.96, dist);
     return mix(lit, 1.0, fade);
 }
 
@@ -97,11 +98,11 @@ fn screen_space_reflection(p: vec3<f32>, n: vec3<f32>, screen_uv: vec2<f32>, wat
         return vec4<f32>(0.0);
     }
 
-    let steps = 10;
+    let steps = 8;
     let step_uv = delta / f32(steps);
     var curr_uv = uv_start + step_uv * 0.7;
 
-    for (var i = 0; i < 10; i++) {
+    for (var i = 0; i < 8; i++) {
         if curr_uv.x < 0.002 || curr_uv.x > 0.998 || curr_uv.y < 0.002 || curr_uv.y > 0.998 {
             break;
         }
@@ -166,16 +167,20 @@ fn render_water(input: MaterialInput) -> vec4<f32> {
         }
     }
 
-    // Direct sun and ambient light
+    // Direct sun and ambient light (linear light)
     let is_sun = dot(frame.light_direction, frame.sun_direction) > 0.0;
-    let sun_color = select(vec3<f32>(0.30, 0.36, 0.50), mix(vec3<f32>(1.38, 0.82, 0.40), vec3<f32>(1.06, 0.98, 0.88), day), is_sun);
-    let direct_sun = sun_color * (water_sun_vis * 0.70 * (1.0 - rain * 0.75));
-    let ambient = input.lightmap * 0.85 + input.colored_light;
+    let sun_color = select(
+        to_linear(vec3<f32>(0.30, 0.36, 0.50)),
+        mix(to_linear(vec3<f32>(1.38, 0.82, 0.40)), to_linear(vec3<f32>(1.06, 0.98, 0.88)), day),
+        is_sun
+    );
+    let direct_sun = sun_color * (water_sun_vis * 0.85 * (1.0 - rain * 0.75));
+    let ambient = input.lightmap * 0.70 + input.colored_light;
 
-    // Clean crystal watercolor (no grainy vanilla texture noise!)
-    let water_base = mix(vec3<f32>(0.05, 0.35, 0.62), input.tint.rgb, 0.72);
+    // Clean crystal watercolor (linear light)
+    let water_base = mix(to_linear(vec3<f32>(0.05, 0.35, 0.62)), input.tint.rgb, 0.72);
     let body = water_base * (ambient + direct_sun * 0.4);
-    let reach = 9.0;
+    let reach = 5.5;
     let absorb = exp(-thickness / reach * vec3<f32>(2.0, 0.85, 0.50));
     var color = mix(body, behind, absorb);
 
@@ -183,12 +188,12 @@ fn render_water(input: MaterialInput) -> vec4<f32> {
     if frame.eye_in == 1u {
         let cos_up = clamp(abs(dot(n, to_eye)), 0.0, 1.0);
         // Distance through water from camera to surface overhead
-        let surface_absorb = exp(-water_dist / 14.0 * vec3<f32>(0.20, 0.06, 0.02));
+        let surface_absorb = exp(-water_dist / 8.0 * vec3<f32>(0.20, 0.06, 0.02));
         var surface_view = mix(body, behind, surface_absorb);
 
         // Total Internal Reflection (critical angle ~48.6°, cos ≈ 0.66): glancing angles reflect deep water
         let tir = smoothstep(0.70, 0.45, cos_up);
-        let deep_water_scatter = vec3<f32>(0.025, 0.22, 0.38) * (day * 0.75 + 0.25);
+        let deep_water_scatter = to_linear(vec3<f32>(0.025, 0.22, 0.38)) * (day * 0.75 + 0.25);
         surface_view = mix(surface_view, deep_water_scatter, tir * 0.85);
 
         // Sunlight sparkle on surface ripples viewed from below
@@ -198,7 +203,7 @@ fn render_water(input: MaterialInput) -> vec4<f32> {
             surface_view += direct_sun * glint;
         }
 
-        return vec4<f32>(shoulder(surface_view), 1.0);
+        return vec4<f32>(to_linear(shoulder(to_gamma(surface_view))), 1.0);
     }
 
     // Reflection by Schlick's Fresnel (water F0 = 0.02)
@@ -206,12 +211,12 @@ fn render_water(input: MaterialInput) -> vec4<f32> {
     let fresnel = 0.025 + 0.975 * pow(1.0 - cos_v, 4.5);
 
     // Dynamic Sky Reflection across the waves: each wave crest catches more sky light!
-    let zenith_sky = vec3<f32>(0.42, 0.68, 0.98);
+    let zenith_sky = to_linear(vec3<f32>(0.42, 0.68, 0.98));
     let horizon_sky = frame.fog_color;
     let wave_sky = mix(horizon_sky, zenith_sky, clamp(n.y * 0.8 + 0.2, 0.0, 1.0)) * day;
-    let night_refl = vec3<f32>(0.02, 0.04, 0.08);
+    let night_refl = to_linear(vec3<f32>(0.02, 0.04, 0.08));
     var mirrored = mix(night_refl, wave_sky, day);
-    mirrored = mix(mirrored, vec3<f32>(0.96, 0.60, 0.35), tw * (1.0 - rain));
+    mirrored = mix(mirrored, to_linear(vec3<f32>(0.96, 0.60, 0.35)), tw * (1.0 - rain));
 
     var has_planar = false;
     // 1. Real Planar Mirror Reflection: waves physically undulate and ripple the reflected world!
@@ -222,7 +227,7 @@ fn render_water(input: MaterialInput) -> vec4<f32> {
     }
 
     // 2. High-speed Screen Space Reflection (SSR): reflects mountains/trees on water at 200+ FPS!
-    if !has_planar && ssr_reflections && top && input.light.y > 0.12 && fresnel > 0.035 {
+    if !has_planar && ssr_reflections && top && water_dist < 80.0 && input.light.y > 0.12 && fresnel > 0.035 {
         let ssr = screen_space_reflection(input.position, n, input.screen, water_dist);
         if ssr.a > 0.01 {
             mirrored = mix(mirrored, ssr.rgb, ssr.a);
@@ -238,7 +243,7 @@ fn render_water(input: MaterialInput) -> vec4<f32> {
         color += direct_sun * glint;
     }
 
-    return vec4<f32>(shoulder(color), 1.0);
+    return vec4<f32>(to_linear(shoulder(to_gamma(color))), 1.0);
 }
 
 fn material(input: MaterialInput) -> Surface {
@@ -247,7 +252,7 @@ fn material(input: MaterialInput) -> Surface {
         return Surface(render_water(input));
     }
     if input.fluid == 2u {
-        return Surface(vec4<f32>(input.albedo.rgb * input.tint.rgb * 1.15, input.albedo.a));
+        return Surface(vec4<f32>(input.albedo.rgb * input.tint.rgb * 1.40, input.albedo.a));
     }
     let albedo = input.albedo;
     let tint = input.tint;
@@ -269,10 +274,10 @@ fn material(input: MaterialInput) -> Surface {
 
     // Nether and The End fallback
     if frame.dimension != 0 {
-        let block_falloff = pow(block_level, 1.75);
-        let torch_color = vec3<f32>(1.0, 0.76, 0.42);
-        let torch_light = torch_color * (block_falloff * 1.35 * torch_warmth);
-        let final_color = albedo.rgb * tint.rgb * max(light_col * 1.1 + torch_light, vec3<f32>(0.04));
+        let block_falloff = pow(block_level, 3.2);
+        let torch_color = to_linear(vec3<f32>(1.0, 0.76, 0.42));
+        let torch_light = torch_color * (block_falloff * 1.90 * torch_warmth);
+        let final_color = albedo.rgb * tint.rgb * max(light_col * 1.23 + torch_light, to_linear(vec3<f32>(0.04)));
         return Surface(vec4<f32>(final_color, albedo.a));
     }
 
@@ -280,9 +285,9 @@ fn material(input: MaterialInput) -> Surface {
     var direct_access = pow(sky_level, 3.2);
 
     // Palette:
-    // Daytime: rich radiant golden sunlight & crisp azure-blue ambient shade
-    let day_sun = vec3<f32>(1.35, 1.15, 0.78);
-    let day_shade = vec3<f32>(0.50, 0.68, 0.92);
+    // Daytime: crisp golden sunlight & deeper cool azure ambient shade for strong 3D mountain contrast
+    let day_sun = vec3<f32>(1.30, 1.13, 0.80);
+    let day_shade = vec3<f32>(0.41, 0.56, 0.80);
 
     // Sunset / Golden Hour (warm amber sunlight, soft rose-violet twilight shade)
     let dusk_sun = vec3<f32>(1.38, 0.82, 0.40);
@@ -305,7 +310,9 @@ fn material(input: MaterialInput) -> Surface {
     shade_filter = mix(shade_filter, rain_shade, rain);
 
     // --- Real Directional Sun & Moon Shadows from Engine Shadow Map ---
-    let is_foliage = (input.tags & 1u) != 0u;
+    let is_foliage = (input.tags & 1u) != 0u || input.material == 2u;
+    // Offset crossed grass/flower quads along light ray past self-intersecting blades while keeping block/tree shadows
+    let foliage_min_bias = select(0.0, 0.38, input.material == 2u);
 
     if shadows && frame.has_shadow == 1u && frame.dimension == 0 && sky_level > 0.05 {
         let n_dot_l = dot(input.normal, frame.light_direction);
@@ -315,7 +322,7 @@ fn material(input: MaterialInput) -> Surface {
             let ndl = select(n_dot_l, 1.0, is_foliage);
             // Soft terminator easing: avoids harsh grazing acne on building walls at sunset
             let terminator = select(smoothstep(0.0, 0.12, n_dot_l), 1.0, is_foliage);
-            let shadow_vis = sun_shadow(input.position, offset_dir, ndl) * terminator;
+            let shadow_vis = sun_shadow(input.position, offset_dir, ndl, foliage_min_bias) * terminator;
             direct_access = shadow_vis * pow(sky_level, 1.2);
         } else {
             direct_access = 0.0;
@@ -343,67 +350,70 @@ fn material(input: MaterialInput) -> Surface {
         roof_ambient = pow(sky_s_curve, 1.30);
     }
 
-    let ambient_level = (0.04 + 0.96 * roof_ambient) * directional_shade;
+    let ambient_level = (0.03 + 0.72 * roof_ambient) * directional_shade;
     let ambient_fill = shade_filter * ambient_level;
-    let direct_sun = sun_filter * (direct_access * 0.72 * (1.0 - rain * 0.75));
+    let direct_sun = sun_filter * (direct_access * 0.70 * (1.0 - rain * 0.75));
 
-    // Normalized tone: radiant sunny daytime (~1.12), rich dramatic twilight & midnight
-    let day_boost = mix(0.92, 1.12, day);
-    let celestial_tone = (ambient_fill + direct_sun) * day_boost;
+    // Normalized tone: converted from display curves to linear light without washing out sunlit dirt/grass
+    let day_boost = mix(0.90, 0.96, day);
+    let celestial_tone = to_linear((ambient_fill + direct_sun) * day_boost);
     light_col = light_col * celestial_tone;
 
     // Deep ambient floor: maintains clean readability in deep caves while letting roof shadows be rich
-    let min_ambient = mix(vec3<f32>(0.025), vec3<f32>(0.035, 0.040, 0.055), day);
+    let min_ambient = mix(vec3<f32>(0.00030), vec3<f32>(0.00062, 0.00084, 0.00171), day);
     light_col = max(light_col, min_ambient);
 
-    // --- 3. Rich Golden Torch, Colored & Emissive Light ---
-    let block_falloff = pow(block_level, 1.75);
-    let torch_color = vec3<f32>(1.0, 0.74, 0.38);
-    let torch_boost = torch_color * (block_falloff * 1.35 * torch_warmth);
+    // --- 3. Rich Golden Torch, Colored & Emissive Light (linear light) ---
+    let block_falloff = pow(block_level, 3.4);
+    let torch_color = vec3<f32>(1.00000, 0.51506, 0.11899);
+    let torch_boost = torch_color * (block_falloff * 1.95 * torch_warmth);
     light_col += torch_boost;
 
     // Dynamic colored lights (soul lanterns, redstone torches, held glow items)
-    let colored_boost = input.colored_light * 1.5;
+    let colored_boost = input.colored_light * 2.4;
     light_col += colored_boost;
 
     // Emissive blocks (lanterns, glowstone, torches, froglights, magma)
     if input.emission > 0.01 {
-        let emissive_light = mix(vec3<f32>(1.0, 0.78, 0.45), vec3<f32>(1.10, 1.05, 1.0), input.emission) * (input.emission * 1.6);
+        let emissive_light = to_linear(mix(vec3<f32>(1.0, 0.78, 0.45), vec3<f32>(1.10, 1.05, 1.0), input.emission) * (input.emission * 1.6));
         light_col = max(light_col, emissive_light);
     }
 
     // --- 4. Foliage Subsurface Scattering (Backlight glow against the sun) ---
     // Smooth camera-relative view ray: 100% continuous, zero derivatives, zero diagonal seams!
     let view_dir = normalize(input.position);
+    // Fade out cleanly as the sun dips below the horizon and respect terrain/shadow occlusion
+    let sun_above = smoothstep(0.0, 0.15, frame.sun_direction.y);
+    let foliage_sun_vis = direct_access * sun_above;
 
-    if is_foliage && (day > 0.02 || tw > 0.02) && sky_level > 0.25 {
-        let sun_align = max(dot(-view_dir, frame.sun_direction), 0.0);
-        let sss_amount = pow(sun_align, 3.2) * sky_level * 0.35 * (day * 0.75 + tw * 1.35) * (1.0 - rain);
-        let is_cherry = (albedo.r > 0.65 && albedo.b > 0.55);
+    if is_foliage && foliage_sun_vis > 0.005 && (day > 0.02 || tw > 0.02) && sky_level > 0.25 {
+        let sun_align = max(dot(view_dir, frame.sun_direction), 0.0);
+        let sss_amount = pow(sun_align, 3.2) * foliage_sun_vis * 0.35 * (day * 0.75 + tw * 1.10) * (1.0 - rain);
+        let is_cherry = (albedo.r > 0.388 && albedo.b > 0.268);
         let sss_foliage_base = select(vec3<f32>(0.55, 0.98, 0.35), vec3<f32>(1.0, 0.76, 0.68), is_cherry);
         let sss_color = mix(sss_foliage_base, vec3<f32>(1.0, 0.68, 0.28), tw);
-        light_col += sss_color * sss_amount;
+        light_col += to_linear(sss_color) * (sss_amount * 0.75);
     }
 
     // --- 5. Golden Solar Rim & Foliage Forward Scattering ---
     // Restricted strictly to foliage: leaves and grass tops catch a soft golden rim; buildings stay rock-solid!
-    if is_foliage && (day > 0.02 || tw > 0.02) && sky_level > 0.45 {
-        let sun_align = max(dot(-view_dir, frame.sun_direction), 0.0);
+    if is_foliage && foliage_sun_vis > 0.005 && (day > 0.02 || tw > 0.02) && sky_level > 0.45 {
+        let sun_align = max(dot(view_dir, frame.sun_direction), 0.0);
         let rim_face = max(dot(input.normal, -view_dir), 0.0);
-        let rim_glow = pow(sun_align, 4.0) * pow(sky_level, 2.0) * rim_face * (day * 0.18 + tw * 0.50) * (1.0 - rain);
+        let rim_glow = pow(sun_align, 4.0) * foliage_sun_vis * rim_face * (day * 0.18 + tw * 0.45) * (1.0 - rain);
         let rim_col = mix(vec3<f32>(1.0, 0.62, 0.22), vec3<f32>(1.0, 0.96, 0.86), day);
-        light_col += rim_col * rim_glow;
+        light_col += to_linear(rim_col) * (rim_glow * 0.75);
     }
 
     // Status effects support (Night Vision potion, Darkness, Blindness)
     if frame.night_vision > 0.0 {
-        light_col = mix(light_col, max(light_col, vec3<f32>(0.82)), frame.night_vision);
+        light_col = mix(light_col, max(light_col, to_linear(vec3<f32>(0.82))), frame.night_vision);
     }
     if frame.darkness > 0.0 {
-        light_col *= (1.0 - frame.darkness * 0.88);
+        light_col *= pow(1.0 - frame.darkness * 0.88, 2.2);
     }
     if frame.blindness > 0.0 {
-        light_col *= (1.0 - frame.blindness * 0.94);
+        light_col *= pow(1.0 - frame.blindness * 0.94, 2.2);
     }
 
     // --- 5. Clean Crystalline Water with Animated Wave Ripples ---
@@ -418,7 +428,7 @@ fn material(input: MaterialInput) -> Surface {
         // Continuous curve: only surfaces exposed to open sky get damp (caves/underground stay dry!)
         let sky_open = smoothstep(0.80, 0.98, sky_level);
         let wetness = frame.wetness * sky_open;
-        let wet_darken = 1.0 - 0.12 * wetness;
+        let wet_darken = 1.0 - 0.24 * wetness;
         base_color = vec4<f32>(base_color.rgb * wet_darken, base_color.a);
     }
 
@@ -431,17 +441,19 @@ fn material(input: MaterialInput) -> Surface {
         let is_solid = albedo.a > 0.99;
         let is_top_surface = is_upward && is_solid;
 
-        // --- Block Identification ---
+        // --- Block Identification (evaluated in gamma texture space only when puddles active) ---
+        let albedo_g = to_gamma(albedo.rgb);
+        let tint_g = to_gamma(tint.rgb);
         // 1. Grass Block (Top of Grass Block / дёрн):
         // In Minecraft assets, grass_block_top.png is greyscale. Biome tint makes it green.
-        let is_grass_albedo = abs(albedo.r - albedo.g) < 0.08 && abs(albedo.g - albedo.b) < 0.08;
-        let is_grass_tint = (tint.g > tint.r * 1.01) && (tint.g > tint.b * 1.03);
+        let is_grass_albedo = abs(albedo_g.r - albedo_g.g) < 0.08 && abs(albedo_g.g - albedo_g.b) < 0.08;
+        let is_grass_tint = (tint_g.g > tint_g.r * 1.01) && (tint_g.g > tint_g.b * 1.03);
         let is_grass_block = is_top_surface && is_grass_albedo && is_grass_tint;
 
         // 2. Dirt Blocks (Dirt, Coarse Dirt, Rooted Dirt, Mud, Podzol / земля):
         // Dirt in Minecraft is untinted (tint.r ≈ tint.g ≈ tint.b) and has a warm earthy brown hue (R > G > B).
-        let is_untinted = abs(tint.r - tint.g) < 0.06 && abs(tint.g - tint.b) < 0.06;
-        let is_dirt_color = (albedo.r > albedo.g * 1.03) && (albedo.g > albedo.b * 1.04) && (albedo.r > albedo.b * 1.15) && (albedo.r >= 0.18 && albedo.r <= 0.72) && (albedo.b <= 0.40);
+        let is_untinted = abs(tint_g.r - tint_g.g) < 0.06 && abs(tint_g.g - tint_g.b) < 0.06;
+        let is_dirt_color = (albedo_g.r > albedo_g.g * 1.03) && (albedo_g.g > albedo_g.b * 1.04) && (albedo_g.r > albedo_g.b * 1.15) && (albedo_g.r >= 0.18 && albedo_g.r <= 0.72) && (albedo_g.b <= 0.40);
         let is_dirt_block = is_top_surface && is_untinted && is_dirt_color;
 
         let is_puddle_surface = is_grass_block || is_dirt_block;
@@ -472,7 +484,7 @@ fn material(input: MaterialInput) -> Surface {
 
             if puddle_mask > 0.001 {
                 // Layer 1: Physical dampening of wet earth/grass under puddle
-                let wet_ground_darken = mix(1.0, 0.86, puddle_mask);
+                let wet_ground_darken = mix(1.0, 0.72, puddle_mask);
                 lit_color *= wet_ground_darken;
 
                 // Layer 2: Puddle water surface with REAL circular raindrop impact waves
@@ -486,19 +498,18 @@ fn material(input: MaterialInput) -> Surface {
                     (rip_z * 0.015 + drops.y * 0.055) * rain
                 ));
 
-                // Layer 3: Dynamic Time-of-Day Matched Sky Reflection
-                let day_sky_refl = mix(vec3<f32>(0.46, 0.50, 0.56), vec3<f32>(0.22, 0.25, 0.30), frame.thunder);
-                let dusk_sky_refl = vec3<f32>(0.32, 0.24, 0.28);
-                let night_sky_refl = vec3<f32>(0.035, 0.045, 0.070);
+                // Layer 3: Dynamic Time-of-Day Matched Sky Reflection (linear light)
+                let day_sky_refl = mix(to_linear(vec3<f32>(0.46, 0.50, 0.56)), to_linear(vec3<f32>(0.22, 0.25, 0.30)), frame.thunder);
+                let dusk_sky_refl = to_linear(vec3<f32>(0.32, 0.24, 0.28));
+                let night_sky_refl = to_linear(vec3<f32>(0.035, 0.045, 0.070));
 
                 var sky_refl_color = mix(night_sky_refl, day_sky_refl, day);
                 sky_refl_color = mix(sky_refl_color, dusk_sky_refl, tw * (1.0 - rain * 0.5));
 
                 // Modulate reflection by local surface ambient lighting so puddles in shadow softly dim
-                // and naturally dissolve into shadows without any harsh bright contrast steps!
-                let local_light = max(luminance(light_col), 0.05);
-                let ambient_factor = clamp(local_light * 1.4, 0.20, 1.0);
-                let torch_refl = torch_color * (pow(block_level, 2.0) * 0.55);
+                let local_light = max(pow(max(luminance(light_col), 0.0), 1.0 / 2.2), 0.05);
+                let ambient_factor = pow(clamp(local_light * 1.4, 0.20, 1.0), 2.2);
+                let torch_refl = torch_color * (pow(block_level, 3.6) * 0.45);
                 let puddle_refl = sky_refl_color * ambient_factor + torch_refl;
 
                 // Layer 4: Glassy Fresnel reflection (gentle 0.15..0.45, preserving natural grass underneath)
@@ -512,7 +523,7 @@ fn material(input: MaterialInput) -> Surface {
                 if rain < 0.90 && (day > 0.05 || tw > 0.05) {
                     let half_vec = normalize(-view_dir + frame.sun_direction);
                     let ndoth = max(dot(puddle_normal, half_vec), 0.0);
-                    let puddle_glint = pow(ndoth, 55.0) * 1.8 * puddle_mask * sky_level * (day + tw) * (1.0 - rain * 0.60);
+                    let puddle_glint = pow(ndoth, 55.0) * 2.2 * puddle_mask * sky_level * (day + tw) * (1.0 - rain * 0.60);
                     specular += vec3<f32>(puddle_glint);
                 }
             }

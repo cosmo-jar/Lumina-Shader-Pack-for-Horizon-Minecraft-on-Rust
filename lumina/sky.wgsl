@@ -173,28 +173,28 @@ fn render_volumetric_clouds(ray_dir: vec3<f32>, background_sky: vec3<f32>) -> ve
     let hg2 = (1.0 - g2*g2) / (4.0 * 3.14159265 * pow(1.0 + g2*g2 - 2.0*g2*cos_theta, 1.5));
     let phase = mix(hg2, hg1, 0.76) * 3.2;
 
-    // 1. Direct Sun / Moon lighting colors
-    let day_sun = vec3<f32>(1.65, 1.60, 1.50);
-    let tw_sun  = vec3<f32>(1.95, 0.82, 0.28);
-    let night_moon = vec3<f32>(0.26, 0.32, 0.46);
-    let storm_sun = vec3<f32>(0.32, 0.36, 0.42);
+    // 1. Direct Sun / Moon lighting colors (precomputed linear light)
+    let day_sun = vec3<f32>(3.00929, 2.81231, 2.44006);
+    let tw_sun  = vec3<f32>(4.34586, 0.64623, 0.06078);
+    let night_moon = vec3<f32>(0.05163, 0.08153, 0.18116);
+    let storm_sun = vec3<f32>(0.08153, 0.10565, 0.14830);
 
     var direct_light = mix(night_moon, day_sun, day);
     direct_light = mix(direct_light, tw_sun, tw * (1.0 - rain * 0.5));
     direct_light = mix(direct_light, storm_sun, rain * 0.75);
 
-    // 2. Ambient Sky light
-    let day_amb = vec3<f32>(0.58, 0.72, 0.92);
-    let tw_amb  = vec3<f32>(0.52, 0.26, 0.46);
-    let night_amb = vec3<f32>(0.045, 0.065, 0.12);
-    let storm_amb = vec3<f32>(0.22, 0.24, 0.28);
+    // 2. Ambient Sky light (precomputed linear light)
+    let day_amb = vec3<f32>(0.30168, 0.48544, 0.83240);
+    let tw_amb  = vec3<f32>(0.23725, 0.05163, 0.18116);
+    let night_amb = vec3<f32>(0.00109, 0.00245, 0.00942);
+    let storm_amb = vec3<f32>(0.03575, 0.04330, 0.06078);
 
     var ambient_light = mix(night_amb, day_amb, day);
     ambient_light = mix(ambient_light, tw_amb, tw * (1.0 - rain * 0.5));
     ambient_light = mix(ambient_light, storm_amb, rain * 0.75);
 
-    // 3. Ground bounce light
-    let ground_bounce = mix(vec3<f32>(0.01), vec3<f32>(0.38, 0.46, 0.30), day) * (1.0 - rain * 0.7);
+    // 3. Ground bounce light (precomputed linear light)
+    let ground_bounce = mix(vec3<f32>(0.00004), vec3<f32>(0.11899, 0.18116, 0.07074), day) * (1.0 - rain * 0.7);
 
     var transmittance = 1.0;
     var accumulated_color = vec3<f32>(0.0);
@@ -241,86 +241,27 @@ fn render_volumetric_clouds(ray_dir: vec3<f32>, background_sky: vec3<f32>) -> ve
 }
 
 fn sky(input: SkyInput) -> vec4<f32> {
-    // Leave Nether and End untouched
+    // Cosmic nebula and starfield sky in The End
+    if frame.dimension == 1 {
+        return vec4<f32>(sample_end_sky(input.direction, true), input.color.a);
+    }
+
+    // Leave Nether untouched
     if frame.dimension != 0 {
         return input.color;
     }
 
     let d = input.direction;
-    let up = max(d.y, 0.0);
+    var final_sky = sample_sky_atmosphere(d, sun_glow);
 
-    // Sun alignment & glare
-    let cos_sun = dot(d, frame.sun_direction);
-    let sun_facing = max(cos_sun, 0.0);
-
-    // Moon alignment
-    let cos_moon = dot(d, frame.moon_direction);
-    let moon_facing = max(cos_moon, 0.0);
-
-    // Weather and time factors from common.wgsl
-    let day = daylight();
-    let tw = twilight();
-    let night = night_factor();
-    let rain = frame.rain;
-
-    // --- 1. Clean Daytime ---
-    let day_zenith = vec3<f32>(0.12, 0.38, 0.88);
-    let day_mid = vec3<f32>(0.38, 0.62, 0.94);
-    let day_horizon = vec3<f32>(0.60, 0.76, 0.96);
-    var day_sky = mix(day_horizon, day_mid, smoothstep(0.0, 0.35, up));
-    day_sky = mix(day_sky, day_zenith, smoothstep(0.30, 0.85, up));
-
-    // --- 2. Magical Sunset / Twilight Palette ---
-    let dusk_zenith = vec3<f32>(0.06, 0.08, 0.24);
-    let dusk_mid = vec3<f32>(0.40, 0.22, 0.50);
-    let dusk_horizon_sun = vec3<f32>(1.0, 0.52, 0.16);
-    let dusk_horizon_spread = vec3<f32>(0.76, 0.28, 0.46);
-    let dusk_horizon = mix(dusk_horizon_spread, dusk_horizon_sun, pow(sun_facing, 1.6));
-
-    var dusk_sky = mix(dusk_horizon, dusk_mid, smoothstep(0.0, 0.28, up));
-    dusk_sky = mix(dusk_sky, dusk_zenith, smoothstep(0.22, 0.75, up));
-
-    // --- 3. Night Sky Palette ---
-    let night_zenith = vec3<f32>(0.02, 0.03, 0.08);
-    let night_horizon = vec3<f32>(0.05, 0.08, 0.16);
-    let night_sky = mix(night_horizon, night_zenith, smoothstep(0.0, 0.60, up));
-
-    // --- 4. Overcast Rain & Storm Palette ---
-    let rain_zenith = vec3<f32>(0.20, 0.24, 0.30);
-    let rain_horizon = vec3<f32>(0.44, 0.48, 0.54);
-    let storm_darken = 1.0 - frame.thunder * 0.45;
-    let rain_sky = mix(rain_horizon, rain_zenith, smoothstep(0.0, 0.70, up)) * storm_darken;
-
-    // Blend clear skies across day/twilight/night
-    var clear_sky = mix(night_sky, day_sky, day);
-    clear_sky = mix(clear_sky, dusk_sky, tw * (1.0 - rain));
-
-    // Blend with rain overcast
-    var final_sky = mix(clear_sky, rain_sky, rain);
-
-    // --- 5. Atmospheric Scattering (Preserves Vanilla Square Sun Quad) ---
-    if rain < 0.95 {
-        // Soft daytime forward solar haze towards the sun
-        let day_sun_haze = pow(sun_facing, 4.0) * 0.16 * day * (1.0 - rain) * sun_glow;
-        final_sky += vec3<f32>(1.12, 0.96, 0.78) * day_sun_haze;
-
-        // Soft atmospheric twilight warmth along horizon without fake circular glare disc
-        let sun_haze = pow(sun_facing, 3.0) * 0.12 * tw * (1.0 - rain) * sun_glow;
-        final_sky += vec3<f32>(1.0, 0.55, 0.22) * sun_haze;
-
-        let lunar_halo = pow(moon_facing, 8.0) * 0.05 * night * (1.0 - rain);
-        final_sky += vec3<f32>(0.65, 0.78, 1.0) * lunar_halo;
-    }
-
-    // --- 6. Volumetric 3D Cumulus Clouds (Minecraft World Altitude: Y=180..320) ---
+    // Volumetric 3D Cumulus Clouds (Minecraft World Altitude: Y=180..320)
     final_sky = render_volumetric_clouds(d, final_sky);
 
-    // --- 7. Horizon / Nadir Ground Blend ---
-    let horizon_color = mix(mix(night_horizon, day_horizon, day), dusk_horizon, tw * (1.0 - rain));
-    let ground_color = mix(horizon_color, rain_horizon, rain);
+    // Horizon / Nadir Ground Blend
     if d.y < 0.0 {
+        let horizon_col = sample_sky_atmosphere(normalize(vec3<f32>(d.x, 0.0, d.z)), sun_glow);
         let nadir_fade = smoothstep(0.0, -0.45, d.y);
-        final_sky = mix(final_sky, ground_color * 0.35, nadir_fade);
+        final_sky = mix(final_sky, horizon_col * 0.10, nadir_fade);
     }
 
     return vec4<f32>(final_sky, input.color.a);

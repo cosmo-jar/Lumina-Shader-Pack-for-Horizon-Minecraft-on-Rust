@@ -1,8 +1,18 @@
 // Lumina - Shared shader utilities (WGSL)
 
-// Standard Rec.709 perceived luminance
+// Standard luminance using frame weights (BT.709 / BT.2020)
 fn luminance(c: vec3<f32>) -> f32 {
-    return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
+    return dot(c, frame.luminance);
+}
+
+// Decode gamma 2.2 display color/factor into linear light
+fn to_linear(c: vec3<f32>) -> vec3<f32> {
+    return pow(max(c, vec3<f32>(0.0)), vec3<f32>(2.2));
+}
+
+// Encode linear light into gamma 2.2 display space
+fn to_gamma(c: vec3<f32>) -> vec3<f32> {
+    return pow(max(c, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2));
 }
 
 // 2D Hash function with integer bitwise XOR (zero trigonometric precision loss)
@@ -275,4 +285,137 @@ fn water_wave(xz: vec2<f32>, t: f32) -> f32 {
 fn shoulder(c: vec3<f32>) -> vec3<f32> {
     let over = max(c - vec3<f32>(0.8), vec3<f32>(0.0));
     return min(c, vec3<f32>(0.8)) + 0.2 * (vec3<f32>(1.0) - exp(-over * 5.0));
+}
+
+// Shared Overworld atmospheric sky colour along ray direction d (linear light)
+// Used by both sky.wgsl and post/atmosphere.wgsl so distant terrain melts seamlessly into the sky.
+fn sample_sky_atmosphere(d: vec3<f32>, sun_glow_amt: f32) -> vec3<f32> {
+    let up = max(d.y, 0.0);
+    let sun_facing = max(dot(d, frame.sun_direction), 0.0);
+
+    let day = daylight();
+    let tw = twilight();
+    let night = night_factor();
+    let rain = frame.rain;
+
+    // 1. Clean Daytime (precomputed linear constants)
+    let day_zenith = vec3<f32>(0.00942, 0.11899, 0.75485);
+    let day_mid = vec3<f32>(0.11899, 0.34935, 0.87273);
+    let day_horizon = vec3<f32>(0.32504, 0.54675, 0.91411);
+    var clear_sky = mix(day_horizon, day_mid, smoothstep(0.0, 0.35, up));
+    clear_sky = mix(clear_sky, day_zenith, smoothstep(0.30, 0.85, up));
+
+    // 2. Night Sky
+    if day < 0.999 {
+        let night_zenith = vec3<f32>(0.00018, 0.00045, 0.00386);
+        let night_horizon = vec3<f32>(0.00137, 0.00386, 0.01774);
+        let night_sky = mix(night_horizon, night_zenith, smoothstep(0.0, 0.60, up));
+        clear_sky = mix(night_sky, clear_sky, day);
+    }
+
+    // 3. Sunset / Twilight
+    if tw > 0.001 && rain < 0.999 {
+        let dusk_zenith = vec3<f32>(0.00205, 0.00386, 0.04330);
+        let dusk_mid = vec3<f32>(0.13321, 0.03575, 0.21764);
+        let dusk_horizon_sun = vec3<f32>(1.00000, 0.23725, 0.01774);
+        let dusk_horizon_spread = vec3<f32>(0.54675, 0.06078, 0.18116);
+        let sf2 = sun_facing * sqrt(max(sun_facing, 0.0));
+        let dusk_horizon = mix(dusk_horizon_spread, dusk_horizon_sun, sf2);
+        var dusk_sky = mix(dusk_horizon, dusk_mid, smoothstep(0.0, 0.28, up));
+        dusk_sky = mix(dusk_sky, dusk_zenith, smoothstep(0.22, 0.75, up));
+        clear_sky = mix(clear_sky, dusk_sky, tw * (1.0 - rain));
+    }
+
+    // 4. Overcast Rain & Storm
+    var final_sky = clear_sky;
+    if rain > 0.001 {
+        let rain_zenith = vec3<f32>(0.02899, 0.04330, 0.07074);
+        let rain_horizon = vec3<f32>(0.16428, 0.19894, 0.25779);
+        let sd = 1.0 - frame.thunder * 0.45;
+        let storm_darken = sd * sd;
+        let rain_sky = mix(rain_horizon, rain_zenith, smoothstep(0.0, 0.70, up)) * storm_darken;
+        final_sky = mix(final_sky, rain_sky, rain);
+    }
+
+    if rain < 0.95 {
+        let sf2 = sun_facing * sun_facing;
+        let day_sun_haze = sf2 * sf2 * 0.16 * day * (1.0 - rain) * sun_glow_amt;
+        final_sky += vec3<f32>(1.28316, 0.91411, 0.57891) * day_sun_haze;
+
+        if tw > 0.001 {
+            let sun_haze = sf2 * sun_facing * 0.12 * tw * (1.0 - rain) * sun_glow_amt;
+            final_sky += vec3<f32>(1.00000, 0.26841, 0.03575) * sun_haze;
+        }
+
+        if night > 0.001 {
+            let mf = max(dot(d, frame.moon_direction), 0.0);
+            let mf4 = mf * mf * mf * mf;
+            let lunar_halo = mf4 * mf4 * 0.05 * night * (1.0 - rain);
+            final_sky += vec3<f32>(0.38762, 0.57891, 1.00000) * lunar_halo;
+        }
+    }
+
+    return final_sky;
+}
+
+// Cosmic nebula & starfield sky for The End (linear light)
+fn sample_end_sky(d: vec3<f32>, with_stars: bool) -> vec3<f32> {
+    // Deep royal-indigo void gradient + glowing amethyst horizon aura
+    let horizon_glow = exp(-abs(d.y) * 3.8);
+    let zenith_col = vec3<f32>(0.006, 0.003, 0.022);
+    let mid_col = vec3<f32>(0.020, 0.008, 0.056);
+    let aura_col = vec3<f32>(0.075, 0.022, 0.140);
+
+    var sky_col = mix(mid_col, zenith_col, smoothstep(0.05, 0.85, abs(d.y)));
+    sky_col = mix(sky_col, aura_col, horizon_glow * 0.70);
+
+    // Flowing galactic nebula band tilted diagonally across the sky dome
+    let band_axis = d.y * 0.68 + d.x * 0.58 - d.z * 0.44;
+    let band_profile = exp(-band_axis * band_axis * 5.2);
+
+    let sph = d.xz / (abs(d.y) + 0.62);
+    let drift = vec2<f32>(frame.time * 0.006, -frame.time * 0.004);
+    let n1 = value_noise(sph * 1.9 + drift);
+    let n2 = value_noise(sph * 4.3 - drift * 1.4);
+    let neb_shape = clamp((n1 * 0.65 + n2 * 0.35 - 0.24) * 1.95, 0.0, 1.0);
+    let dust_lane = smoothstep(0.32, 0.70, value_noise(sph * 3.1 + vec2<f32>(7.3, 2.9)));
+
+    let magenta_neb = vec3<f32>(0.180, 0.024, 0.280) * (neb_shape * (0.35 + 0.65 * band_profile));
+    let cyan_neb = vec3<f32>(0.022, 0.115, 0.240) * (neb_shape * neb_shape * band_profile * 1.25);
+    sky_col += (magenta_neb + cyan_neb) * (1.0 - dust_lane * 0.45);
+
+    if with_stars {
+        // Primary bright twinkling stars on a 3D spherical grid (zero pole distortion)
+        let grid1 = d * 125.0;
+        let cell1 = floor(grid1);
+        let h1 = hash3(cell1);
+        if h1 > 0.915 {
+            let local1 = fract(grid1) - 0.5;
+            let jitter = (hash33(cell1 + vec3<f32>(3.1, 7.7, 1.9)) - 0.5) * 0.40;
+            let dist1 = length(local1 - jitter);
+            let core1 = smoothstep(0.34, 0.04, dist1);
+            let twinkle = 0.72 + 0.28 * sin(frame.time * 2.4 + h1 * 90.0);
+            let tint_pick = fract(h1 * 37.0);
+            var star_tint = vec3<f32>(0.92, 0.86, 1.00);
+            if tint_pick < 0.35 {
+                star_tint = vec3<f32>(0.65, 0.92, 1.00);
+            } else if tint_pick > 0.72 {
+                star_tint = vec3<f32>(1.00, 0.82, 0.60);
+            }
+            sky_col += star_tint * (core1 * core1 * twinkle * 2.2);
+        }
+
+        // Fine background starfield
+        let grid2 = d * 240.0;
+        let cell2 = floor(grid2);
+        let h2 = hash3(cell2 + vec3<f32>(17.0, 29.0, 43.0));
+        if h2 > 0.895 {
+            let local2 = fract(grid2) - 0.5;
+            let dist2 = length(local2);
+            let core2 = smoothstep(0.36, 0.05, dist2);
+            sky_col += vec3<f32>(0.78, 0.72, 1.00) * (core2 * core2 * 0.75);
+        }
+    }
+
+    return sky_col;
 }

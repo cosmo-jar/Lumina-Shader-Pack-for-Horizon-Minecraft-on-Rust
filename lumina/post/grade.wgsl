@@ -1,4 +1,4 @@
-// Lumina - Cinematic Grade, Lens Flares, Wide Bloom & Tonemapping (WGSL)
+// Lumina - Cinematic Grade, Wide Bloom & Tonemapping (WGSL)
 
 override exposure: f32 = 0.94;
 override contrast: f32 = 1.04;
@@ -8,7 +8,6 @@ override chromatic_aberration: bool = true;
 override chromatic_aberration_strength: f32 = 1.0;
 override wide_bloom: bool = true;
 override bloom_intensity: f32 = 1.0;
-override lens_flares: bool = true;
 override anti_aliasing: u32 = 0u;
 
 // High-Precision Edge-Selective Anti-Aliasing with Subpixel Clarity Protection
@@ -26,11 +25,11 @@ fn apply_clarity_fxaa(uv: vec2<f32>, raw_col: vec3<f32>) -> vec3<f32> {
     let col_l = textureSampleLevel(previous, linear_sampler, uv + vec2<f32>(-px.x, 0.0), 0.0).rgb;
     let col_r = textureSampleLevel(previous, linear_sampler, uv + vec2<f32>( px.x, 0.0), 0.0).rgb;
 
-    let luma_c = luminance(raw_col);
-    let luma_u = luminance(col_u);
-    let luma_d = luminance(col_d);
-    let luma_l = luminance(col_l);
-    let luma_r = luminance(col_r);
+    let luma_c = sqrt(max(luminance(raw_col), 0.0));
+    let luma_u = sqrt(max(luminance(col_u), 0.0));
+    let luma_d = sqrt(max(luminance(col_d), 0.0));
+    let luma_l = sqrt(max(luminance(col_l), 0.0));
+    let luma_r = sqrt(max(luminance(col_r), 0.0));
 
     let luma_min = min(luma_c, min(min(luma_u, luma_d), min(luma_l, luma_r)));
     let luma_max = max(luma_c, max(max(luma_u, luma_d), max(luma_l, luma_r)));
@@ -71,62 +70,13 @@ fn apply_clarity_fxaa(uv: vec2<f32>, raw_col: vec3<f32>) -> vec3<f32> {
     return mix(raw_col, smoothed, blend_weight);
 }
 
-// Extract highlight glow for bloom: fast, zero depth reads!
+// Extract highlight glow for bloom in linear light: fast, zero depth reads!
 fn extract_bloom(uv: vec2<f32>) -> vec3<f32> {
     let col = textureSampleLevel(previous, linear_sampler, uv, 0.0).rgb;
     let lum = luminance(col);
-    // Threshold set to 1.25..2.40: grass, sky and normal surfaces have lum < 1.0 and return 0.0!
-    // Only genuine light sources (torches, fire, lanterns, lava, sun) emit bloom.
-    return col * smoothstep(1.25, 2.40, lum);
-}
-
-// Cinematic Anamorphic Sun Streak (Zero Hard Edges, Ultra-Smooth Gaussian Falloff)
-fn get_sun_lens_flare(uv: vec2<f32>) -> vec3<f32> {
-    if !lens_flares || daylight() <= 0.02 || frame.rain > 0.85 || frame.dimension != 0 || frame.eye_in != 0u {
-        return vec3<f32>(0.0);
-    }
-
-    let sun_view = frame.view * vec4<f32>(frame.sun_direction, 0.0);
-    let clip = frame.projection * vec4<f32>(sun_view.xyz, 1.0);
-    if clip.w <= 0.0001 {
-        return vec3<f32>(0.0);
-    }
-
-    let ndc = clip.xy / clip.w;
-    let sun_uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-
-    // Skip if sun is off-screen
-    if sun_uv.x < -0.15 || sun_uv.x > 1.15 || sun_uv.y < -0.15 || sun_uv.y > 1.15 {
-        return vec3<f32>(0.0);
-    }
-
-    let aspect = frame.resolution.x / frame.resolution.y;
-    let delta = (uv - sun_uv) * vec2<f32>(aspect, 1.0);
-    let r2 = dot(delta, delta);
-
-    // Early exit: only pixels close to the sun need occlusion testing (saves ~10 million depth reads/frame!)
-    if r2 > 0.35 {
-        return vec3<f32>(0.0);
-    }
-
-    // Smooth sun occlusion check (averaging 5 points to prevent view-bobbing flicker)
-    let o = vec2<f32>(0.008, 0.008);
-    var occ = 0.0;
-    if depth_at(sun_uv) <= 0.00002 { occ += 0.36; }
-    if depth_at(sun_uv + vec2<f32>(o.x, 0.0)) <= 0.00002 { occ += 0.16; }
-    if depth_at(sun_uv - vec2<f32>(o.x, 0.0)) <= 0.00002 { occ += 0.16; }
-    if depth_at(sun_uv + vec2<f32>(0.0, o.y)) <= 0.00002 { occ += 0.16; }
-    if depth_at(sun_uv - vec2<f32>(0.0, o.y)) <= 0.00002 { occ += 0.16; }
-
-    if occ <= 0.01 {
-        return vec3<f32>(0.0);
-    }
-
-    // Radiant Solar Corona & Atmospheric Light Bloom (soft, glowing, zero laser lines)
-    let core_glow = exp(-r2 * 60.0) * vec3<f32>(1.25, 1.10, 0.90) * 0.32;
-    let wide_warmth = exp(-r2 * 8.0) * vec3<f32>(1.10, 0.85, 0.60) * 0.16;
-
-    return (core_glow + wide_warmth) * (occ * daylight() * (1.0 - frame.rain * 0.85));
+    // Threshold in linear light (1.65..4.50): grass and normal sunlit terrain stay below bloom threshold;
+    // torches, fire, lanterns, lava and sun emit smooth atmospheric glow.
+    return col * smoothstep(1.65, 4.50, lum);
 }
 
 fn post(input: PostInput) -> vec4<f32> {
@@ -166,34 +116,33 @@ fn post(input: PostInput) -> vec4<f32> {
             let offset = dirs[i] * (blur_step * rad_mult);
             bloom_sum += extract_bloom(input.uv + offset);
         }
-        c += (bloom_sum / 8.0) * (0.13 * bloom_intensity);
+        c += (bloom_sum / 8.0) * (0.11 * bloom_intensity);
     }
 
-    // --- 3. Cinematic Lens Flare & Anamorphic Sun Streaks ---
-    c += get_sun_lens_flare(input.uv);
+    // --- 3. Exposure (in linear light) ---
+    c *= pow(exposure, 2.2);
 
-    // --- 4. Exposure ---
-    let day_exposure = mix(exposure, exposure * 1.08, daylight());
-    c *= day_exposure;
-
-    // --- 5. ACES Filmic Tonemapping ---
-    c = tonemap_aces(c);
+    // --- 5. Perceptual Look: ACES Filmic Tonemapping, Contrast, Vibrance & Saturation ---
+    // Run display-tuned look curves on encoded light while preserving HDR headroom when active
+    let hr_g = pow(max(frame.headroom, 1.0), 1.0 / 2.2);
+    var g = to_gamma(c);
+    g = tonemap_aces(g / hr_g) * hr_g;
 
     // --- 6. Natural Contrast Curve ---
-    c = pow(max(c, vec3<f32>(0.0)), vec3<f32>(contrast));
+    g = pow(max(g, vec3<f32>(0.0)), vec3<f32>(contrast));
 
     // --- 7. Saturation & Selective Vibrance ---
     let day_vibrance = daylight() * (1.0 - frame.rain * 0.5);
-    let gray_v = (c.r + c.g + c.b) * 0.33333;
-    let mn = min(c.r, min(c.g, c.b));
-    let mx = max(c.r, max(c.g, c.b));
+    let gray_v = (g.r + g.g + g.b) * 0.33333;
+    let mn = min(g.r, min(g.g, g.b));
+    let mx = max(g.r, max(g.g, g.b));
     let sat_weight = (1.0 - (mx - mn)) * (1.0 - mx * 0.8) * gray_v * 4.5;
     // Vibrance expands midtone chroma on natural foliage without blowing out saturated highlights
-    c = mix(c, c + (c - vec3<f32>(gray_v)) * (0.35 * day_vibrance), clamp(sat_weight, 0.0, 1.0));
+    g = mix(g, g + (g - vec3<f32>(gray_v)) * (0.35 * day_vibrance), clamp(sat_weight, 0.0, 1.0));
 
-    let lum = luminance(c);
+    let lum = luminance(g);
     let rain_sat = mix(saturation, saturation * 0.88, frame.rain * 0.70);
-    c = mix(vec3<f32>(lum), c, rain_sat);
+    g = mix(vec3<f32>(lum), g, rain_sat);
 
     // --- 8. Subtle Cinematic Vignette ---
     if vignette {
@@ -201,8 +150,9 @@ fn post(input: PostInput) -> vec4<f32> {
         let coord = (input.uv - 0.5) * vec2<f32>(aspect, 1.0);
         let dist = length(coord) / (0.5 * length(vec2<f32>(aspect, 1.0)));
         let vig = 1.0 - smoothstep(0.70, 1.30, dist) * 0.18;
-        c *= vig;
+        g *= vig;
     }
 
-    return vec4<f32>(clamp(c, vec3<f32>(0.0), vec3<f32>(1.0)), input.color.a);
+    c = to_linear(g);
+    return vec4<f32>(max(c, vec3<f32>(0.0)), 1.0);
 }

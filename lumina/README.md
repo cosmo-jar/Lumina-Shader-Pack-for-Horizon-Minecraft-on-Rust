@@ -1,4 +1,4 @@
-# Lumina Shader Pack for Horizon (Minecraft 26.3) — v1.0.0
+# Lumina Shader Pack for Horizon (Minecraft 26.3) — v1.1.0
 
 Lumina is a native WGSL shader pack engineered specifically for the modern **Horizon** Rust/WGPU game engine. It is designed to deliver **radiant, realistic, and rich atmospheric visuals** while maintaining **exceptionally high frame rates (200-300+ FPS)** without heavy post-processing bloat.
 
@@ -60,8 +60,9 @@ All settings can be tweaked directly in the **shader settings menu** in-game, or
 | **Directional Shadows** | Bool | `true` | Real sun & moon shadow maps cast by terrain and blocks. |
 | **Shadow Quality (FPS)** | Choice | `1024` | Shadow map resolution: `512` (fastest), `1024` (balanced), `1536`, `2048` (ultra). |
 | **Shadow Distance** | Choice | `112` | Distance in blocks that shadow mapping covers. |
-| **Planar Water Reflections** | Bool | `true` | Real-time planar mirror reflections of terrain and trees on water. |
+| **Planar Water Reflections** | Bool | `false` | Real-time planar mirror reflections of terrain and trees on water (optional extra pass). |
 | **Screen-Space Reflections (SSR)** | Bool | `true` | High-speed SSR reflecting visible terrain and shores at 200+ FPS. |
+| **Fog Density** | Float | `1.0` | Intensity of atmospheric and distant mountain fog. |
 | **Water Waves & Glints** | Bool | `true` | Animated 3D waves, Fresnel reflections, and sunlight sparkles. |
 | **Underwater Optics & Caustics** | Bool | `true` | Refractive wave wobble, dancing sunlight caustics, and turquoise absorption. |
 | **Volumetric 3D Clouds** | Bool | `true` | Enable or disable custom raymarched 3D cumulus clouds. |
@@ -70,13 +71,12 @@ All settings can be tweaked directly in the **shader settings menu** in-game, or
 | **Rain Puddles & Wetness** | Bool | `false` | Organic rain puddles on grass and dirt with raindrop ripples. |
 | **Volumetric God Rays** | Bool | `true` | Sunbeams streaming through tree canopies. |
 | **Wide Bloom** | Bool | `true` | Dual-tier atmospheric glow around torches, lanterns, and celestial bodies. |
-| **Cinematic Lens Flares** | Bool | `true` | Anamorphic sun streaks and optical flares. |
 | **Waving Foliage** | Bool | `true` | Wind swaying on leaves, grass, and plants. |
 | **Torch Warmth** | Float | `1.0` | Warm golden-amber radiance of lanterns and torches. |
 
 ---
 
-# Шейдер-пак Lumina для Horizon (Minecraft 26.3) — v1.0.0 [RU]
+# Шейдер-пак Lumina для Horizon (Minecraft 26.3) — v1.1.0 [RU]
 
 Lumina — это нативный WGSL шейдер-пак, созданный специально для современного игрового движка **Horizon** (Rust/WGPU). Главные достоинства пака — **чистая, живая и реалистичная атмосфера** в сочетании с **высоким фреймрейтом (200-300+ FPS)** без перегруженности лишними пост-эффектами.
 
